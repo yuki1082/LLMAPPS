@@ -1,0 +1,27 @@
+[project]
+name = "mypj"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp",
+    "gnews>=0.4.2",
+    "ipykernel>=7.2.0",
+    "langchain>=1.3.1",
+    "langchain-google-genai>=4.2.2",
+    "langchain-openai>=1.2.1",
+    "lxml[html-clean]>=6.0.2",
+    "newsapi-python>=0.2.7",
+    "newspaper3k>=0.2.8",
+    "notebook>=7.5.6",
+    "rdkit-pypi",
+    "strands-agents-tools>=0.2.16",
+    "strands-agents[gemini]>=1.18.0",
+    "streamlit>=1.57.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.2.0",
+]

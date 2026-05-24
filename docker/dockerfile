@@ -1,0 +1,174 @@
+# syntax=docker/dockerfile:1
+
+# ------------------------------------------------------------
+# Python 3.11 の軽量イメージをベースにする
+# ------------------------------------------------------------
+# slim は軽量だが、ビルドに必要なツールは最低限しか入っていない。
+# そのため、build-essential や curl などは後で apt で追加する。
+FROM python:3.11-slim
+
+
+# ------------------------------------------------------------
+# Python / uv / OS 周りの基本設定
+# ------------------------------------------------------------
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_LINK_MODE=copy \
+    PATH="/opt/venv/bin:$PATH"
+
+# PYTHONDONTWRITEBYTECODE=1
+#   Python が __pycache__ や .pyc を作らないようにする。
+#   バインドマウント時に余計なファイルがホスト側へ出るのを抑える。
+#
+# PYTHONUNBUFFERED=1
+#   print やログをバッファせず、すぐ標準出力へ出す。
+#   Docker logs でログを見やすくするため。
+#
+# PIP_NO_CACHE_DIR=1
+#   pip のキャッシュを残さない。
+#   uv中心なら重要度は低いが、pipを使った場合のイメージ肥大化を抑える。
+#
+# DEBIAN_FRONTEND=noninteractive
+#   apt install 時に対話プロンプトが出ないようにする。
+#
+# UV_PROJECT_ENVIRONMENT=/opt/venv
+#   uv が作る仮想環境を /opt/venv にする。
+#   /home/app はホストPCからバインドマウントするため、
+#   /home/app/.venv に作るとマウントで隠れたり、ホスト環境と混ざったりする。
+#
+# UV_LINK_MODE=copy
+#   uv のキャッシュと仮想環境が別ファイルシステムになる場合の hardlink 警告を避ける。
+#
+# PATH="/opt/venv/bin:$PATH"
+#   python / streamlit / pytest などを打ったときに、
+#   /opt/venv 側のコマンドを優先して使う。
+
+
+# ------------------------------------------------------------
+# 作業ディレクトリ
+# ------------------------------------------------------------
+# 開発時は compose.yaml でホストPCのプロジェクトフォルダを
+# この /home/app にバインドマウントする。
+WORKDIR /workspace
+
+
+# ------------------------------------------------------------
+# OSパッケージのインストール
+# ------------------------------------------------------------
+# build-essential:
+#   一部Pythonライブラリがソースビルドを要求する場合に備える。
+#
+# curl / ca-certificates:
+#   uv・Node.js関連の取得やHTTPS通信に必要。
+#
+# git:
+#   コンテナ内で git 操作するため。
+#
+# emacs:
+#   コンテナ内で軽くファイル編集したい場合用。不要なら削除してよい。
+#
+# bash:
+#   スクリプト実行や NodeSource セットアップで使うため明示的に入れておく。
+#
+# rm -rf /var/lib/apt/lists/*:
+#   apt のパッケージリストを削除して、イメージサイズを抑える。
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    ca-certificates \
+    git \
+    emacs \
+    bash \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# ------------------------------------------------------------
+# uv / uvx のインストール
+# ------------------------------------------------------------
+# uv公式イメージから uv と uvx のバイナリだけをコピーする。
+#
+# コピー元:
+#   ghcr.io/astral-sh/uv:latest の /uv と /uvx
+#
+# コピー先:
+#   このイメージの /bin/
+#
+# 結果:
+#   /bin/uv
+#   /bin/uvx
+#
+# /bin は通常 PATH に入っているため、すぐ uv コマンドを使える。
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+
+# ------------------------------------------------------------
+# Node.js のインストール
+# ------------------------------------------------------------
+# Node.js が不要なら、このブロックは削除してよい。
+#
+# setup_24.x:
+#   NodeSource の Node.js 24 系リポジトリを apt に追加する。
+#
+# apt-get install nodejs:
+#   実際に Node.js と npm をインストールする。
+#
+# NodeSource は Node.js のLinux向けバイナリ配布リポジトリを提供している。
+# https://github.com/nodesource/distributions
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# ------------------------------------------------------------
+# Python依存関係のインストール
+# ------------------------------------------------------------
+# 依存関係ファイルだけ先にコピーする。
+# これにより、ソースコードだけ変更した場合はDockerのレイヤキャッシュが効きやすい。
+#
+# 注意:
+#   compose.yaml で .:/home/app をバインドマウントすると、
+#   実行中コンテナの /home/app/pyproject.toml は
+#   ホストPC側の pyproject.toml として見える。
+#
+#   ここで COPY した pyproject.toml / uv.lock は、
+#   あくまで docker build 時に依存関係を入れるためのスナップショット。
+COPY pyproject.toml uv.lock ./
+
+
+# ------------------------------------------------------------
+# uv.lock に従って依存関係を同期
+# ------------------------------------------------------------
+# --frozen:
+#   uv.lock を更新せず、ロックファイル通りにインストールする。
+#
+# --no-install-project:
+#   プロジェクト本体はインストールせず、依存ライブラリだけ入れる。
+#   開発時はソースコードをバインドマウントして使うため、これで十分。
+#
+# 仮想環境は UV_PROJECT_ENVIRONMENT=/opt/venv により /opt/venv に作成される。
+RUN uv sync --frozen --no-install-project
+
+
+# ------------------------------------------------------------
+# Streamlit などで使うポート
+# ------------------------------------------------------------
+# EXPOSE は「このポートを使う想定」というメタ情報。
+# 実際にホストPCへ公開する設定は compose.yaml の ports で行う。
+EXPOSE 8501
+
+
+# ------------------------------------------------------------
+# CMD は書かない
+# ------------------------------------------------------------
+# 開発用コンテナでは、compose.yaml 側で command: sleep infinity を指定し、
+# コンテナを起動しっぱなしにする。
+#
+# その後、必要に応じて以下のように実行する:
+#
+#   docker compose exec dev bash
+#   uv run python app/main.py
+#   uv run streamlit run app/main.py --server.address=0.0.0.0
