@@ -14,7 +14,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 
-def initialize():
+def initialize_app():
     st.set_page_config(
         page_title = "My Chat App",
     )
@@ -24,41 +24,63 @@ def initialize():
         st.session_state["messages"] = []
 
 
-def select_model(temparature=0): 
+def initialize_message():
+    if clear_button := st.sidebar.button("Clear Conversation", key="clear"):
+        st.session_state["messages"] = [("system", "U R a helpful assistant")]
+
+
+def select_llm_model(temparature=0): 
     models = ("Gemini-2.5-flash", "GPT-OSS-120B")
     model = st.sidebar.radio("Choose a model", models)
     
     if model == "Gemini-2.5-flash":
-        llm = ChatGoogleGenerativeAI(model = model, api_key = GEMINI_API_KEY)
-    elif model == "GPT-OSS-120B":
-        llm = ChatOpenAI(
-        model = "openai/gpt-oss-120b:free",
-        api_key = OPENROUTER_API_KEY,
-        base_url = "https://openrouter.ai/api/v1"
-        )
-
-def chat_with_history():
-
-    #display  chat messages。最初は何も入ってないから実行されない
-    for message in st.session_state["messages"]:
-        with st.chat_input
-
-    if prompt := st.chat_input("Say something"):
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        return ChatGoogleGenerativeAI(model = "gemini-2.5-flash", api_key = GEMINI_API_KEY)
         
-        st.session_state["messages"].append({"role": "user", "content": prompt})
+    elif model == "GPT-OSS-120B":
+        return ChatOpenAI(
+            model = "openai/gpt-oss-120b:free",
+            api_key = OPENROUTER_API_KEY,
+            base_url = "https://openrouter.ai/api/v1"
+            )
+        
 
+def initialize_llm_chain():
+    llm_model = select_llm_model()
+    prompt = ChatPromptTemplate.from_messages([
+        *st.session_state["messages"],
+        ("user", "{user_input}")
+    ])
+
+    output_parser = StrOutputParser()
+
+    chain = prompt | llm_model | output_parser
+    return chain 
+
+
+
+def generate_response(chain, user_input):
+    return chain.invoke({"user_input": user_input})
+
+def chat_with_history(chain):
+    #display  chat messages。最初は何も入ってないから実行されない
+    #st.sessions_state["messages"] = [{"role":, "content":}, {"role":, "content":}]
+    if user_input := st.chat_input("Say something"):
+        response = generate_response(chain, user_input)
+
+        st.session_state["messages"].append(("user", user_input))
+        st.session_state["messages"].append(("ai", response))
 
     for message in st.session_state["messages"]:
-        with st.chat_message()
+        with st.chat_message(message[0]):
+            st.markdown(message[1])
+            # fragmentだけ再実行して、追加分を表示
 
-output_parser = StrOutputParser()
-chain = prompt | llm | output_parser
-chain2 = prompt | llm | output_parser
-response = chain.invoke({"input": "こんにちは, 君の名前は？"})
-response2 = chain2.invoke({"input": "こんにちは、てめーの名前は？"})
 
-print(response)
-print("------")
-print(response2)
+def main():
+    initialize_app()
+    initialize_message()
+    chain = initialize_llm_chain()
+    chat_with_history(chain)
+
+if __name__ == "__main__":
+    main()
