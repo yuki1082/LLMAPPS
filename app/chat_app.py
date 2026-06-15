@@ -34,7 +34,7 @@ def select_llm_model(temparature=0):
     model = st.sidebar.radio("Choose a model", models)
     
     if model == "Gemini-2.5-flash":
-        return ChatGoogleGenerativeAI(model = "gemini-2.5-flash", api_key = GEMINI_API_KEY)
+        return ChatGoogleGenerativeAI(model = "gemini-2.5-flash", api_key = GEMINI_API_KEY, streaming=True)
         
     elif model == "GPT-OSS-120B":
         return ChatOpenAI(
@@ -61,19 +61,33 @@ def initialize_llm_chain():
 def generate_response(chain, user_input):
     return chain.invoke({"user_input": user_input})
 
+
 def chat_with_history(chain):
+
+#    for role, message in st.session_state.get("messages", []):
+#        st.chat_message(role).markdown(message)
+
     #display  chat messages。最初は何も入ってないから実行されない
-    #st.sessions_state["messages"] = [{"role":, "content":}, {"role":, "content":}]
+    #st.sessions_state["messages"] = [{"role":, "content":}, {"role":, "content":}] 
+    #st.sessions_state["messages"] = [("role", "{role}")///]
+    for message in st.session_state["messages"]:
+        with st.chat_message(message[0]):
+            st.markdown(message[1])
+
     if user_input := st.chat_input("Say something"):
-        response = generate_response(chain, user_input)
+#        response = generate_response(chain, user_input)
+        with st.chat_message("user"):
+            st.markdown(user_input)
+        
+        with st.chat_message("ai"): 
+        #    response = st.stream(chain.invoke({"user_input": user_input}))
+             response = st.write_stream(chain.stream({"user_input": user_input}))
+
+
 
         st.session_state["messages"].append(("user", user_input))
         st.session_state["messages"].append(("ai", response))
 
-    for message in st.session_state["messages"]:
-        with st.chat_message(message[0]):
-            st.markdown(message[1])
-            # fragmentだけ再実行して、追加分を表示
 
 
 def main():
