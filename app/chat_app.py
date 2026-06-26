@@ -30,7 +30,7 @@ def initialize_message():
 
 
 def select_llm_model(temparature=0): 
-    models = ("Gemini-2.5-flash", "GPT-OSS-120B", "Local/qwen3.5-9b")
+    models = ("Gemini-2.5-flash", "GPT-OSS-120B", "Local/qwen3.5-9b", "Local/qwen3.5-9b@q4_k_m")
     model = st.sidebar.radio("Choose a model", models)
     
     if model == "Gemini-2.5-flash":
@@ -49,6 +49,13 @@ def select_llm_model(temparature=0):
             base_url = "http://192.168.11.40:1234/v1",
             
         )
+    elif model == "Local/qwen3.5-9b@q4_k_m":
+         return ChatOpenAI(
+             model = "qwen3.5-9b@q4_k_m",
+             api_key = "llm-studio",
+             base_url = "http://192.168.11.40:1234/v1",
+        )
+
         
 
 def initialize_llm_chain():
