@@ -30,7 +30,7 @@ def initialize_message():
 
 
 def select_llm_model(temparature=0): 
-    models = ("Gemini-2.5-flash", "GPT-OSS-120B")
+    models = ("Gemini-2.5-flash", "GPT-OSS-120B", "Local/qwen3.5-9b", "Local/qwen3.5-9b@q4_k_m")
     model = st.sidebar.radio("Choose a model", models)
     
     if model == "Gemini-2.5-flash":
@@ -42,6 +42,20 @@ def select_llm_model(temparature=0):
             api_key = OPENROUTER_API_KEY,
             base_url = "https://openrouter.ai/api/v1"
             )
+    elif model == "Local/qwen3.5-9b":
+        return ChatOpenAI(
+            model = "qwen3.5-9b@q8_0",
+            api_key = "llm-studio",
+            base_url = "http://192.168.11.40:1234/v1",
+            
+        )
+    elif model == "Local/qwen3.5-9b@q4_k_m":
+         return ChatOpenAI(
+             model = "qwen3.5-9b@q4_k_m",
+             api_key = "llm-studio",
+             base_url = "http://192.168.11.40:1234/v1",
+        )
+
         
 
 def initialize_llm_chain():
@@ -81,8 +95,9 @@ def chat_with_history(chain):
         
         with st.chat_message("ai"): 
         #    response = st.stream(chain.invoke({"user_input": user_input}))
-             response = st.write_stream(chain.stream({"user_input": user_input}))
-
+        #     response = st.write_stream(chain.stream({"user_input": user_input}))
+            response = chain.invoke({"user_input": user_input})
+            st.write(response)
 
 
         st.session_state["messages"].append(("user", user_input))

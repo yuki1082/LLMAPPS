@@ -16,6 +16,7 @@ dependencies = [
     "newspaper3k>=0.2.8",
     "notebook>=7.5.6",
     "rdkit-pypi",
+    "readability-lxml>=0.8.4.1",
     "strands-agents-tools>=0.2.16",
     "strands-agents[gemini]>=1.18.0",
     "streamlit>=1.57.0",
